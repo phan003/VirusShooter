@@ -1,0 +1,783 @@
+<!doctype html>
+<html lang="th" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Virus Shooter</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;700;900&family=Orbitron:wght@700;900&display=swap');
+
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+
+    canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+
+    #game-container { width: 100%; height: 100%; position: relative; background: #0a0a1a; }
+
+    .overlay {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: rgba(5, 5, 20, 0.92); z-index: 10;
+      font-family: 'Kanit', sans-serif;
+    }
+
+    .overlay.hidden { display: none; }
+
+    .btn-start {
+      font-family: 'Orbitron', sans-serif;
+      background: linear-gradient(135deg, #00ff88, #00cc66);
+      color: #0a0a1a; border: none; padding: 18px 50px;
+      font-size: 22px; font-weight: 900; border-radius: 12px;
+      cursor: pointer; text-transform: uppercase;
+      box-shadow: 0 0 30px rgba(0,255,136,0.4);
+      transition: all 0.2s;
+    }
+    .btn-start:hover { transform: scale(1.08); box-shadow: 0 0 50px rgba(0,255,136,0.6); }
+
+    .hud {
+      position: absolute; top: 0; left: 0; width: 100%; padding: 12px 20px;
+      display: flex; justify-content: space-between; align-items: flex-start;
+      font-family: 'Kanit', sans-serif; z-index: 5; pointer-events: none;
+      box-sizing: border-box;
+    }
+
+    .bullet-indicator {
+      position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 10px; z-index: 5; pointer-events: none;
+      font-family: 'Kanit', sans-serif;
+    }
+
+    .bullet-key {
+      padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 600;
+      border: 2px solid rgba(255,255,255,0.2); text-align: center;
+      transition: all 0.2s;
+    }
+    .bullet-key.active { border-color: #fff; transform: scale(1.15); box-shadow: 0 0 20px currentColor; }
+
+    .reload-hint {
+      position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+      font-family: 'Kanit', sans-serif; font-size: 13px; color: rgba(255,255,255,0.4);
+      z-index: 5; pointer-events: none; text-align: center;
+    }
+
+    .reload-progress {
+      position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
+      width: 200px; height: 6px; background: rgba(255,255,255,0.1);
+      border-radius: 3px; z-index: 5; pointer-events: none; overflow: hidden;
+    }
+    .reload-progress .fill {
+      height: 100%; background: #00ff88; border-radius: 3px;
+      transition: width 0.1s;
+    }
+
+    .gesture-canvas {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 6; pointer-events: none;
+    }
+
+    .damage-flash {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(255, 0, 0, 0.3); z-index: 4; pointer-events: none;
+      opacity: 0; transition: opacity 0.1s;
+    }
+    .damage-flash.active { opacity: 1; }
+
+    .virus-info-panel {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+      margin: 20px 0; max-width: 500px;
+    }
+    .virus-card {
+      background: rgba(255,255,255,0.05); border-radius: 10px;
+      padding: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.1);
+    }
+    .virus-card .emoji { font-size: 36px; margin-bottom: 6px; }
+    .virus-card .name { font-size: 15px; font-weight: 700; }
+    .virus-card .key-hint { font-size: 12px; margin-top: 4px; opacity: 0.7; }
+  </style>
+  <style>body { box-sizing: border-box; }</style>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js" type="text/javascript"></script>
+  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+  <script src="/_sdk/element_sdk.js" type="text/javascript"></script>
+ </head>
+ <body class="h-full">
+  <div id="game-container">
+   <canvas id="gameCanvas"></canvas>
+   <div class="damage-flash" id="damageFlash"></div>
+   <canvas class="gesture-canvas" id="gestureCanvas"></canvas>
+   <div class="hud" id="hud" style="display:none;">
+    <div>
+     <div style="color:#00ff88; font-size:14px; font-weight:600;">
+      คะแนน
+     </div>
+     <div id="scoreDisplay" style="font-family:'Orbitron',sans-serif; font-size:28px; color:#fff; font-weight:900;">
+      0
+     </div>
+    </div>
+    <div style="text-align:center;">
+     <div id="gameTitle" style="font-family:'Orbitron',sans-serif; font-size:16px; color:rgba(255,255,255,0.6); font-weight:700; letter-spacing:2px;">
+      VIRUS SHOOTER
+     </div>
+    </div>
+    <div style="text-align:right;">
+     <div style="color:#ff4466; font-size:14px; font-weight:600;">
+      ❤️ พลังชีวิต
+     </div>
+     <div id="hpDisplay" style="font-family:'Orbitron',sans-serif; font-size:28px; color:#fff; font-weight:900;">
+      5
+     </div>
+    </div>
+   </div>
+   <div class="bullet-indicator" id="bulletIndicator" style="display:none;">
+    <div class="bullet-key" id="bk-q" style="color:#ff3344; background:rgba(255,51,68,0.15);">
+     <div style="font-size:18px; font-weight:900;">
+      Q
+     </div>
+     <div style="font-size:10px;">
+      แดง
+     </div>
+    </div>
+    <div class="bullet-key" id="bk-w" style="color:#33aaff; background:rgba(51,170,255,0.15);">
+     <div style="font-size:18px; font-weight:900;">
+      W
+     </div>
+     <div style="font-size:10px;">
+      ฟ้า
+     </div>
+    </div>
+    <div class="bullet-key" id="bk-e" style="color:#33ff77; background:rgba(51,255,119,0.15);">
+     <div style="font-size:18px; font-weight:900;">
+      E
+     </div>
+     <div style="font-size:10px;">
+      เขียว
+     </div>
+    </div>
+    <div class="bullet-key" id="bk-r" style="color:#ff8833; background:rgba(255,136,51,0.15);">
+     <div style="font-size:18px; font-weight:900;">
+      R
+     </div>
+     <div style="font-size:10px;">
+      ส้ม
+     </div>
+    </div>
+    <div style="color:#fff; font-size:13px; display:flex; align-items:center; margin-left:8px;">
+     🔫 <span id="ammoDisplay" style="font-family:'Orbitron',sans-serif; font-weight:700; margin-left:6px;">10</span>
+    </div>
+   </div>
+   <div class="reload-progress" id="reloadProgress" style="display:none;">
+    <div class="fill" id="reloadFill" style="width:0%"></div>
+   </div>
+   <div class="reload-hint" id="reloadHint" style="display:none;">
+    กด SPACE เพื่อรีโหลด
+   </div><!-- Start Screen -->
+   <div class="overlay" id="startScreen">
+    <div style="font-family:'Orbitron',sans-serif; font-size:clamp(28px,5vw,48px); font-weight:900; color:#00ff88; text-shadow: 0 0 40px rgba(0,255,136,0.5); margin-bottom:8px;" id="titleText">
+     VIRUS SHOOTER
+    </div>
+    <div style="font-size:18px; color:rgba(255,255,255,0.6); margin-bottom:24px;">
+     🎯 เกมยิงไวรัสคอมพิวเตอร์
+    </div>
+    <div class="virus-info-panel">
+     <div class="virus-card">
+      <div class="emoji">
+       🦠
+      </div>
+      <div class="name" style="color:#ff3344;">
+       ไวรัส (Virus)
+      </div>
+      <div class="key-hint">
+       กด Q → กระสุนแดง
+      </div>
+     </div>
+     <div class="virus-card">
+      <div class="emoji">
+       🐴
+      </div>
+      <div class="name" style="color:#33aaff;">
+       โทรจัน (Trojan)
+      </div>
+      <div class="key-hint">
+       กด W → กระสุนฟ้า
+      </div>
+     </div>
+     <div class="virus-card">
+      <div class="emoji">
+       🐛
+      </div>
+      <div class="name" style="color:#33ff77;">
+       หนอน (Worm)
+      </div>
+      <div class="key-hint">
+       กด E → กระสุนเขียว
+      </div>
+     </div>
+     <div class="virus-card">
+      <div class="emoji">
+       📧
+      </div>
+      <div class="name" style="color:#ff8833;">
+       ฟิชชิง (Phishing)
+      </div>
+      <div class="key-hint">
+       กด R → กระสุนส้ม
+      </div>
+     </div>
+    </div>
+    <div style="font-size:14px; color:rgba(255,255,255,0.4); margin-bottom:24px; text-align:center; line-height:1.8;">
+     🖱️ คลิกซ้าย = ยิง &nbsp;|&nbsp; กด SPACE = รีโหลด<br>
+      ⚡ ยิงไวรัสด้วยกระสุนสีที่ถูกต้องเท่านั้น!
+    </div><button class="btn-start" id="btnStart" onclick="startGame()">เริ่มเกม</button>
+   </div><!-- Game Over Screen -->
+   <div class="overlay hidden" id="gameOverScreen">
+    <div style="font-family:'Orbitron',sans-serif; font-size:clamp(32px,5vw,52px); font-weight:900; color:#ff4466; text-shadow: 0 0 40px rgba(255,68,102,0.5); margin-bottom:8px;">
+     GAME OVER
+    </div>
+    <div style="font-size:18px; color:rgba(255,255,255,0.5); margin-bottom:20px;">
+     ระบบถูกไวรัสโจมตีสำเร็จ!
+    </div>
+    <div style="font-family:'Orbitron',sans-serif; font-size:48px; font-weight:900; color:#fff; margin-bottom:6px;" id="finalScore">
+     0
+    </div>
+    <div style="font-size:16px; color:#00ff88; margin-bottom:30px;">
+     คะแนน
+    </div><button class="btn-start" onclick="startGame()">เล่นอีกครั้ง</button>
+   </div>
+  </div>
+  <script>
+    // ========== CONFIG ==========
+    const defaultConfig = {
+      game_title: 'VIRUS SHOOTER'
+    };
+
+    function applyConfig(config) {
+      const t = config.game_title || defaultConfig.game_title;
+      const el1 = document.getElementById('titleText');
+      const el2 = document.getElementById('gameTitle');
+      if (el1) el1.textContent = t;
+      if (el2) el2.textContent = t;
+    }
+
+    // ========== GAME ENGINE ==========
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const gestureCanvas = document.getElementById('gestureCanvas');
+    const gestureCtx = gestureCanvas.getContext('2d');
+
+    let W, H;
+    function resize() {
+      const container = document.getElementById('game-container');
+      W = canvas.width = gestureCanvas.width = container.clientWidth;
+      H = canvas.height = gestureCanvas.height = container.clientHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // Bullet types
+    const BULLET_TYPES = {
+      q: { color: '#ff3344', name: 'แดง', target: 'virus' },
+      w: { color: '#33aaff', name: 'ฟ้า', target: 'trojan' },
+      e: { color: '#33ff77', name: 'เขียว', target: 'worm' },
+      r: { color: '#ff8833', name: 'ส้ม', target: 'phishing' }
+    };
+
+    // Virus types
+    const VIRUS_TYPES = {
+      virus:    { emoji: '🦠', color: '#ff3344', name: 'ไวรัส', speed: 0.7, size: 28, hp: 1, score: 10 },
+      trojan:   { emoji: '🐴', color: '#33aaff', name: 'โทรจัน', speed: 0.5, size: 32, hp: 2, score: 20 },
+      worm:     { emoji: '🐛', color: '#33ff77', name: 'หนอน', speed: 1.0, size: 22, hp: 1, score: 15 },
+      phishing: { emoji: '📧', color: '#ff8833', name: 'ฟิชชิง', speed: 0.6, size: 26, hp: 1, score: 15 }
+    };
+
+    let gameState = 'menu'; // menu, playing, over
+    let score = 0;
+    let hp = 5;
+    let ammo = 10;
+    const MAX_AMMO = 10;
+    let currentBullet = 'q';
+    let bullets = [];
+    let viruses = [];
+    let particles = [];
+    let stars = [];
+    let spawnTimer = 0;
+    let spawnInterval = 120;
+    let difficulty = 1;
+    let frameCount = 0;
+    let playerX = 0, playerY = 0;
+    let mouseX = 0, mouseY = 0;
+    let playerAngle = -Math.PI / 2;
+
+    // Gesture reload
+    let spacePressed = false;
+    const SPACE_RELOAD_DELAY = 300; // ms
+    let lastReloadTime = 0;
+
+    // Stars background
+    function initStars() {
+      stars = [];
+      for (let i = 0; i < 80; i++) {
+        stars.push({
+          x: Math.random() * W,
+          y: Math.random() * H,
+          size: Math.random() * 2 + 0.5,
+          speed: Math.random() * 0.3 + 0.1,
+          alpha: Math.random() * 0.5 + 0.3
+        });
+      }
+    }
+
+    function updateBulletIndicator() {
+      ['q','w','e','r'].forEach(k => {
+        const el = document.getElementById('bk-' + k);
+        if (el) el.classList.toggle('active', currentBullet === k);
+      });
+      const ammoEl = document.getElementById('ammoDisplay');
+      if (ammoEl) ammoEl.textContent = ammo;
+    }
+
+    function startGame() {
+      gameState = 'playing';
+      score = 0;
+      hp = 5;
+      ammo = MAX_AMMO;
+      currentBullet = 'q';
+      bullets = [];
+      viruses = [];
+      particles = [];
+      spawnTimer = 0;
+      spawnInterval = 120;
+      difficulty = 1;
+      frameCount = 0;
+      playerX = W / 2;
+      playerY = H - 60;
+
+      document.getElementById('startScreen').classList.add('hidden');
+      document.getElementById('gameOverScreen').classList.add('hidden');
+      document.getElementById('hud').style.display = 'flex';
+      document.getElementById('bulletIndicator').style.display = 'flex';
+      document.getElementById('reloadHint').style.display = 'block';
+      document.getElementById('reloadProgress').style.display = 'block';
+
+      updateBulletIndicator();
+      updateHUD();
+      initStars();
+    }
+
+    function gameOver() {
+      gameState = 'over';
+      document.getElementById('hud').style.display = 'none';
+      document.getElementById('bulletIndicator').style.display = 'none';
+      document.getElementById('reloadHint').style.display = 'none';
+      document.getElementById('reloadProgress').style.display = 'none';
+      document.getElementById('finalScore').textContent = score;
+      document.getElementById('gameOverScreen').classList.remove('hidden');
+    }
+
+    function updateHUD() {
+      document.getElementById('scoreDisplay').textContent = score;
+      document.getElementById('hpDisplay').textContent = hp;
+    }
+
+    function flashDamage() {
+      const el = document.getElementById('damageFlash');
+      el.classList.add('active');
+      setTimeout(() => el.classList.remove('active'), 200);
+    }
+
+    // Spawn virus
+    function spawnVirus() {
+      const types = Object.keys(VIRUS_TYPES);
+      const type = types[Math.floor(Math.random() * types.length)];
+      const vt = VIRUS_TYPES[type];
+      const x = Math.random() * (W - 80) + 40;
+
+      viruses.push({
+        x, y: -30,
+        type,
+        hp: vt.hp,
+        maxHp: vt.hp,
+        size: vt.size,
+        speed: vt.speed * (1 + difficulty * 0.1),
+        angle: 0,
+        wobble: Math.random() * Math.PI * 2
+      });
+    }
+
+    // Shoot bullet
+    function shoot() {
+      if (ammo <= 0 || gameState !== 'playing') return;
+      ammo--;
+      updateBulletIndicator();
+
+      const bt = BULLET_TYPES[currentBullet];
+      const angle = Math.atan2(mouseY - playerY, mouseX - playerX);
+      const speed = 10;
+
+      bullets.push({
+        x: playerX,
+        y: playerY - 15,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        color: bt.color,
+        target: bt.target,
+        size: 5,
+        trail: []
+      });
+    }
+
+    // Particles
+    function spawnParticles(x, y, color, count) {
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 4 + 1;
+        particles.push({
+          x, y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          color,
+          life: 1,
+          decay: Math.random() * 0.03 + 0.02,
+          size: Math.random() * 4 + 2
+        });
+      }
+    }
+
+    // ========== DRAW ==========
+    function drawStars() {
+      stars.forEach(s => {
+        s.y += s.speed;
+        if (s.y > H) { s.y = 0; s.x = Math.random() * W; }
+        ctx.globalAlpha = s.alpha + Math.sin(frameCount * 0.02 + s.x) * 0.2;
+        ctx.fillStyle = '#aabbdd';
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+    }
+
+    function drawPlayer() {
+      playerAngle = Math.atan2(mouseY - playerY, mouseX - playerX);
+
+      // Base glow
+      const grad = ctx.createRadialGradient(playerX, playerY, 5, playerX, playerY, 50);
+      grad.addColorStop(0, 'rgba(0,255,136,0.2)');
+      grad.addColorStop(1, 'rgba(0,255,136,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(playerX, playerY, 50, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Ship body
+      ctx.save();
+      ctx.translate(playerX, playerY);
+      ctx.rotate(playerAngle + Math.PI / 2);
+
+      // Shield ring
+      ctx.strokeStyle = `rgba(0,255,136,${0.3 + Math.sin(frameCount * 0.05) * 0.1})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, 28, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Main body
+      ctx.fillStyle = '#1a2a3a';
+      ctx.strokeStyle = '#00ff88';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, -22);
+      ctx.lineTo(-14, 16);
+      ctx.lineTo(0, 10);
+      ctx.lineTo(14, 16);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Cockpit
+      const bt = BULLET_TYPES[currentBullet];
+      ctx.fillStyle = bt.color;
+      ctx.beginPath();
+      ctx.arc(0, -4, 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Engine glow
+      ctx.fillStyle = '#00ff88';
+      ctx.beginPath();
+      ctx.arc(-6, 14, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(6, 14, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    function drawBullets() {
+      bullets.forEach(b => {
+        // Trail
+        b.trail.push({ x: b.x, y: b.y });
+        if (b.trail.length > 6) b.trail.shift();
+        b.trail.forEach((t, i) => {
+          const alpha = i / b.trail.length * 0.4;
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = b.color;
+          ctx.beginPath();
+          ctx.arc(t.x, t.y, b.size * (i / b.trail.length), 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+
+        // Bullet
+        ctx.fillStyle = b.color;
+        ctx.shadowColor = b.color;
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      });
+    }
+
+    function drawViruses() {
+      viruses.forEach(v => {
+        const vt = VIRUS_TYPES[v.type];
+        v.wobble += 0.05;
+
+        // Danger ring
+        ctx.strokeStyle = vt.color + '44';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(v.x, v.y, v.size + 8 + Math.sin(v.wobble) * 3, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Glow
+        const grad = ctx.createRadialGradient(v.x, v.y, 2, v.x, v.y, v.size + 10);
+        grad.addColorStop(0, vt.color + '33');
+        grad.addColorStop(1, 'transparent');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(v.x, v.y, v.size + 10, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Emoji
+        ctx.font = `${v.size * 1.6}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(vt.emoji, v.x, v.y);
+
+        // Name label
+        ctx.font = '700 11px Kanit, sans-serif';
+        ctx.fillStyle = vt.color;
+        ctx.fillText(vt.name, v.x, v.y + v.size + 16);
+
+        // HP bar
+        if (v.maxHp > 1) {
+          const barW = 30;
+          const barH = 4;
+          ctx.fillStyle = 'rgba(255,255,255,0.15)';
+          ctx.fillRect(v.x - barW/2, v.y - v.size - 14, barW, barH);
+          ctx.fillStyle = vt.color;
+          ctx.fillRect(v.x - barW/2, v.y - v.size - 14, barW * (v.hp / v.maxHp), barH);
+        }
+      });
+    }
+
+    function drawParticles() {
+      particles.forEach(p => {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+    }
+
+    function drawGrid() {
+      ctx.strokeStyle = 'rgba(0,255,136,0.03)';
+      ctx.lineWidth = 1;
+      const gridSize = 60;
+      for (let x = 0; x < W; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, H);
+        ctx.stroke();
+      }
+      for (let y = 0; y < H; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(W, y);
+        ctx.stroke();
+      }
+    }
+
+    // ========== UPDATE ==========
+    function update() {
+      if (gameState !== 'playing') return;
+      frameCount++;
+
+      // Difficulty ramp
+      if (frameCount % 600 === 0) {
+        difficulty += 0.5;
+        if (spawnInterval > 40) spawnInterval -= 8;
+      }
+
+      // Spawn
+      spawnTimer++;
+      if (spawnTimer >= spawnInterval) {
+        spawnTimer = 0;
+        spawnVirus();
+      }
+
+      // Update bullets
+      bullets.forEach(b => {
+        b.x += b.vx;
+        b.y += b.vy;
+      });
+      bullets = bullets.filter(b => b.x > -20 && b.x < W+20 && b.y > -20 && b.y < H+20);
+
+      // Update viruses
+      viruses.forEach(v => {
+        const angle = Math.atan2(playerY - v.y, playerX - v.x);
+        const wobbleOffset = Math.sin(v.wobble) * 0.5;
+        v.x += Math.cos(angle + wobbleOffset) * v.speed;
+        v.y += Math.sin(angle + wobbleOffset) * v.speed;
+      });
+
+      // Collision: bullet vs virus
+      const bulletsToRemove = new Set();
+      const virusesToRemove = new Set();
+
+      bullets.forEach((b, bi) => {
+        viruses.forEach((v, vi) => {
+          const dx = b.x - v.x;
+          const dy = b.y - v.y;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+          if (dist < v.size + b.size + 5) {
+            bulletsToRemove.add(bi);
+            if (b.target === v.type) {
+              v.hp--;
+              spawnParticles(v.x, v.y, VIRUS_TYPES[v.type].color, 6);
+              if (v.hp <= 0) {
+                virusesToRemove.add(vi);
+                score += VIRUS_TYPES[v.type].score;
+                spawnParticles(v.x, v.y, VIRUS_TYPES[v.type].color, 20);
+                updateHUD();
+              }
+            } else {
+              // Wrong color - virus not affected, small feedback
+              spawnParticles(b.x, b.y, '#666', 4);
+            }
+          }
+        });
+      });
+
+      bullets = bullets.filter((_, i) => !bulletsToRemove.has(i));
+      viruses = viruses.filter((_, i) => !virusesToRemove.has(i));
+
+      // Collision: virus reaches player
+      viruses = viruses.filter(v => {
+        const dx = v.x - playerX;
+        const dy = v.y - playerY;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < 35) {
+          hp--;
+          flashDamage();
+          spawnParticles(playerX, playerY, '#ff4466', 15);
+          updateHUD();
+          if (hp <= 0) gameOver();
+          return false;
+        }
+        // Also remove if way past bottom
+        if (v.y > H + 50) {
+          hp--;
+          flashDamage();
+          updateHUD();
+          if (hp <= 0) gameOver();
+          return false;
+        }
+        return true;
+      });
+
+      // Particles
+      particles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.05;
+        p.life -= p.decay;
+      });
+      particles = particles.filter(p => p.life > 0);
+    }
+
+    function draw() {
+      ctx.fillStyle = '#0a0a1a';
+      ctx.fillRect(0, 0, W, H);
+
+      if (gameState === 'playing') {
+        drawGrid();
+        drawStars();
+        drawParticles();
+        drawBullets();
+        drawViruses();
+        drawPlayer();
+      } else if (gameState === 'menu') {
+        drawStars();
+      }
+    }
+
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // ========== INPUT ==========
+    canvas.addEventListener('mousemove', e => {
+      const rect = canvas.getBoundingClientRect();
+      mouseX = (e.clientX - rect.left) * (W / rect.width);
+      mouseY = (e.clientY - rect.top) * (H / rect.height);
+      if (gameState === 'playing') {
+        playerX = W / 2 + (mouseX - W / 2) * 0.4;
+      }
+    });
+
+    canvas.addEventListener('click', e => {
+      if (gameState === 'playing') shoot();
+    });
+
+    // Right-click gesture for reload
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    // Keyboard
+    window.addEventListener('keydown', e => {
+      if (gameState !== 'playing') return;
+      const key = e.key.toLowerCase();
+      if (['q','w','e','r'].includes(key)) {
+        currentBullet = key;
+        updateBulletIndicator();
+      }
+      // Space to reload
+      if (e.code === 'Space' && !spacePressed) {
+        e.preventDefault();
+        spacePressed = true;
+        const now = Date.now();
+        if (now - lastReloadTime >= SPACE_RELOAD_DELAY && ammo < MAX_AMMO) {
+          ammo = MAX_AMMO;
+          lastReloadTime = now;
+          updateBulletIndicator();
+          spawnParticles(playerX, playerY - 10, '#00ff88', 12);
+        }
+      }
+    });
+
+    window.addEventListener('keyup', e => {
+      if (e.code === 'Space') {
+        spacePressed = false;
+      }
+    });
+
+    // Init
+    initStars();
+    gameLoop();
+  </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9dcb4367b1477331',t:'MTc3MzU3NTAzNi4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
