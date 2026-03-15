@@ -16,4 +16,4 @@
 - กด Space = รีโหลด
 
 ## 🚀 เล่นเกม
-https://username.github.io/virus-shooter/
+[https://phan003.github.io/VirusShooter/]
